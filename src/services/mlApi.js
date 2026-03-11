@@ -200,6 +200,19 @@ export async function getAllUserItems(userId) {
   return batches.flat()
 }
 
+// ------------- Questions & Answers -------------
+export async function getQuestions(sellerId, params = {}) {
+  const res = await mlAxios.get('/questions/search', {
+    params: { seller_id: sellerId, limit: 50, ...params }
+  })
+  return res.data
+}
+
+export async function postAnswer(questionId, text) {
+  const res = await mlAxios.post('/answers', { question_id: questionId, text })
+  return res.data
+}
+
 // ------------- Mock data (for demo / testing without credentials) -------------
 export function getMockCampaigns() {
   return [
@@ -296,4 +309,61 @@ export function getMockDailyReport(days = 30) {
     })
   }
   return report
+}
+
+export function getMockQuestions() {
+  const listings = getMockListings().slice(0, 10)
+  const questionTexts = [
+    'Tem garantia de fábrica?',
+    'Faz entrega para o interior do estado?',
+    'Qual o prazo de entrega para São Paulo?',
+    'Aceita parcelamento sem juros no cartão?',
+    'O produto vem com nota fiscal?',
+    'Qual a voltagem do produto? Bivolt?',
+    'Tem disponível em outras cores?',
+    'É original ou importado?',
+    'Qual o prazo para troca caso precise?',
+    'Vocês entregam via Correios ou transportadora?',
+    'Tem manual em português?',
+    'Pode ser retirado pessoalmente?',
+    'O produto acompanha todos os acessórios?',
+    'Funciona com 110v?',
+    'Qual a capacidade de armazenamento?'
+  ]
+  const answers = [
+    'Olá! Sim, o produto possui garantia de 1 ano de fábrica. Qualquer dúvida estamos à disposição!',
+    'Sim, entregamos para todo o Brasil via Correios e transportadora.',
+    'O prazo de entrega para São Paulo é de 2 a 5 dias úteis.',
+    'Sim, parcelamos em até 12x sem juros no cartão de crédito.',
+    'Sim, todos os nossos produtos acompanham nota fiscal eletrônica.',
+    'O produto é bivolt (110v/220v), funciona em qualquer tomada.',
+    'No momento temos disponível apenas as cores listadas no anúncio.',
+    'Produto 100% original com certificação do fabricante.'
+  ]
+
+  let id = 100000
+  return listings.flatMap((item, itemIdx) => {
+    const total = [3, 2, 1, 4, 2, 1, 3, 2, 1, 2][itemIdx] || 1
+    return Array.from({ length: total }, (_, i) => {
+      const isAnswered = (itemIdx + i) % 3 !== 0
+      const daysAgo = Math.floor(Math.random() * 10) + 1
+      const answerDaysAgo = Math.floor(daysAgo / 2)
+      return {
+        id: id++,
+        item_id: item.id,
+        item_title: item.title,
+        item_thumbnail: item.thumbnail,
+        item_permalink: item.permalink,
+        text: questionTexts[(itemIdx * 3 + i) % questionTexts.length],
+        status: isAnswered ? 'ANSWERED' : 'UNANSWERED',
+        date_created: new Date(Date.now() - daysAgo * 86400000).toISOString(),
+        from: { id: 200000 + itemIdx * 10 + i, nickname: `comprador${200000 + itemIdx * 10 + i}` },
+        answer: isAnswered ? {
+          text: answers[(itemIdx + i) % answers.length],
+          date_created: new Date(Date.now() - answerDaysAgo * 86400000).toISOString(),
+          status: 'ACTIVE'
+        } : null
+      }
+    })
+  })
 }

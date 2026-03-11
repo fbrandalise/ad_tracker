@@ -44,6 +44,11 @@ const routes = [
         component: () => import('@/views/ListingsView.vue')
       },
       {
+        path: 'questions',
+        name: 'Questions',
+        component: () => import('@/views/QuestionsView.vue')
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('@/views/SettingsView.vue')
