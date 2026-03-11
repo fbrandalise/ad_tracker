@@ -36,10 +36,16 @@
       </div>
     </div>
 
-    <!-- Loading progress -->
+    <!-- Loading items -->
     <div v-if="loading" class="loading-card">
       <i class="pi pi-spin pi-spinner" style="font-size:1.5rem;color:#3483FA" />
       <span>Carregando anúncios... {{ items.length }} carregados</span>
+    </div>
+
+    <!-- Loading performance (non-blocking) -->
+    <div v-if="!loading && loadingPerformance" class="perf-loading-bar">
+      <i class="pi pi-spin pi-spinner" style="font-size:0.9rem;color:#3483FA" />
+      <span>Carregando métricas de performance... {{ performanceProgress.loaded }}/{{ performanceProgress.total }}</span>
     </div>
 
     <!-- AG Grid -->
@@ -84,7 +90,7 @@ import { ref, computed, onMounted } from 'vue'
 import { AgGridVue } from 'ag-grid-vue3'
 import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community'
 import { useAuthStore } from '@/stores/auth'
-import { getAllUserItems, getMockListings } from '@/services/mlApi'
+import { getAllUserItems, getMockListings, enrichItemsWithPerformance } from '@/services/mlApi'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
@@ -95,6 +101,8 @@ ModuleRegistry.registerModules([AllCommunityModule])
 
 const authStore = useAuthStore()
 const loading = ref(false)
+const loadingPerformance = ref(false)
+const performanceProgress = ref({ loaded: 0, total: 0 })
 const items = ref([])
 const quickFilter = ref('')
 const statusFilter = ref('')
@@ -146,6 +154,20 @@ function conditionRenderer(params) {
 function thumbnailRenderer(params) {
   if (!params.value) return ''
   return `<img src="${params.value}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;" onerror="this.style.display='none'" />`
+}
+
+function healthRenderer(params) {
+  const map = {
+    good: '<span style="background:#dcfce7;color:#16a34a;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:500;">Boa</span>',
+    moderate: '<span style="background:#fef9c3;color:#ca8a04;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:500;">Regular</span>',
+    bad: '<span style="background:#fee2e2;color:#dc2626;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:500;">Ruim</span>'
+  }
+  return map[params.value] || '<span style="color:#94a3b8;font-size:12px;">—</span>'
+}
+
+function visitasRenderer(params) {
+  if (params.value == null) return '<span style="color:#94a3b8;font-size:12px;">...</span>'
+  return numFmt(params.value)
 }
 
 function linkRenderer(params) {
@@ -229,6 +251,22 @@ const columnDefs = ref([
     width: 110,
     valueFormatter: (p) => numFmt(p.value),
     type: 'numericColumn'
+  },
+  {
+    field: 'visits_30d',
+    headerName: 'Visitas (30d)',
+    width: 130,
+    cellRenderer: visitasRenderer,
+    type: 'numericColumn',
+    valueFormatter: (p) => p.value != null ? numFmt(p.value) : '...'
+  },
+  {
+    field: 'health_status',
+    headerName: 'Saúde',
+    width: 110,
+    cellRenderer: healthRenderer,
+    cellStyle: { display: 'flex', alignItems: 'center' },
+    sortable: true
   }
 ])
 
@@ -256,10 +294,14 @@ const summary = computed(() => {
   const totalStock = data.reduce((s, i) => s + (i.available_quantity || 0), 0)
   const totalSold = data.reduce((s, i) => s + (i.sold_quantity || 0), 0)
   const avgPrice = data.length ? data.reduce((s, i) => s + (i.price || 0), 0) / data.length : 0
+  const totalVisits = data.reduce((s, i) => s + (i.visits_30d || 0), 0)
+  const healthGood = data.filter(i => i.health_status === 'good').length
   return [
     { label: 'Total de anúncios', value: data.length },
     { label: 'Ativos', value: active },
     { label: 'Pausados', value: paused },
+    { label: 'Visitas (30d)', value: loadingPerformance.value ? '...' : numFmt(totalVisits) },
+    { label: 'Saúde boa', value: loadingPerformance.value ? '...' : healthGood },
     { label: 'Estoque total', value: numFmt(totalStock) },
     { label: 'Total vendidos', value: numFmt(totalSold) },
     { label: 'Preço médio', value: currFmt(avgPrice) }
@@ -289,13 +331,36 @@ function openSelected() {
 
 async function loadListings() {
   loading.value = true
+  loadingPerformance.value = false
   items.value = []
   try {
-    items.value = isDemo.value
-      ? getMockListings()
-      : await getAllUserItems(authStore.userId)
+    if (isDemo.value) {
+      items.value = getMockListings()
+    } else {
+      items.value = await getAllUserItems(authStore.userId)
+      loadPerformance()
+    }
   } finally {
     loading.value = false
+  }
+}
+
+async function loadPerformance() {
+  if (!items.value.length) return
+  loadingPerformance.value = true
+  performanceProgress.value = { loaded: 0, total: items.value.length }
+  try {
+    const perfData = await enrichItemsWithPerformance(
+      items.value,
+      (loaded, total) => { performanceProgress.value = { loaded, total } }
+    )
+    const perfMap = Object.fromEntries(perfData.map(p => [p.id, p]))
+    items.value = items.value.map(item => ({
+      ...item,
+      ...(perfMap[item.id] || {})
+    }))
+  } finally {
+    loadingPerformance.value = false
   }
 }
 
@@ -360,6 +425,18 @@ onMounted(() => loadListings())
   font-size: 1.1rem;
   font-weight: 700;
   color: #1e293b;
+}
+
+.perf-loading-bar {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 0.5rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #1d4ed8;
+  font-size: 0.8rem;
 }
 
 .loading-card {

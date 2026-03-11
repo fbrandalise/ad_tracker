@@ -116,6 +116,47 @@ export async function getAdsDailyReport(accountId, dateFrom, dateTo, limit = 50)
   return res.data
 }
 
+// ------------- Items: Performance -------------
+export async function getItemVisits(itemId, last = 30, unit = 'day') {
+  const res = await mlAxios.get(`/items/${itemId}/visits/time_window`, {
+    params: { last, unit }
+  })
+  return res.data
+}
+
+export async function getItemHealth(itemId) {
+  const res = await mlAxios.get(`/items/${itemId}/health`)
+  return res.data
+}
+
+export async function enrichItemsWithPerformance(items, onProgress) {
+  const BATCH_SIZE = 10
+  const results = []
+
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const batch = items.slice(i, i + BATCH_SIZE)
+    const batchResults = await Promise.allSettled(
+      batch.map(async (item) => {
+        const [visits, health] = await Promise.allSettled([
+          getItemVisits(item.id),
+          getItemHealth(item.id)
+        ])
+        return {
+          id: item.id,
+          visits_30d: visits.status === 'fulfilled' ? (visits.value?.total_visits ?? 0) : 0,
+          health_status: health.status === 'fulfilled' ? (health.value?.status ?? null) : null
+        }
+      })
+    )
+    batchResults.forEach(r => {
+      if (r.status === 'fulfilled') results.push(r.value)
+    })
+    onProgress?.(Math.min(i + BATCH_SIZE, items.length), items.length)
+  }
+
+  return results
+}
+
 // ------------- Items (Listings) -------------
 export async function getUserItemIds(userId, offset = 0, limit = 100) {
   const res = await mlAxios.get(`/users/${userId}/items/search`, {
@@ -218,13 +259,19 @@ export function getMockListings() {
     { title: 'Mesa Gamer Rise Mode X40', price: 1299.00, condition: 'new', status: 'paused', available_quantity: 0, sold_quantity: 22 },
     { title: 'Cadeira Gamer DXRacer Craft L', price: 2799.00, condition: 'new', status: 'active', available_quantity: 4, sold_quantity: 11 }
   ]
-  return items.map((item, i) => ({
-    id: `MLB${900000000 + i}`,
-    ...item,
-    currency_id: 'BRL',
-    thumbnail: `https://via.placeholder.com/60x60/3483FA/FFFFFF?text=${encodeURIComponent(item.title.charAt(0))}`,
-    permalink: `https://www.mercadolivre.com.br/p/MLB${900000000 + i}`
-  }))
+  const healthOptions = ['good', 'good', 'good', 'moderate', 'moderate', 'bad']
+  return items.map((item, i) => {
+    const visits = Math.floor(Math.random() * 800) + 30
+    return {
+      id: `MLB${900000000 + i}`,
+      ...item,
+      currency_id: 'BRL',
+      thumbnail: `https://via.placeholder.com/60x60/3483FA/FFFFFF?text=${encodeURIComponent(item.title.charAt(0))}`,
+      permalink: `https://www.mercadolivre.com.br/p/MLB${900000000 + i}`,
+      visits_30d: item.status === 'closed' ? 0 : visits,
+      health_status: item.status === 'active' ? healthOptions[i % healthOptions.length] : null
+    }
+  })
 }
 
 export function getMockDailyReport(days = 30) {
