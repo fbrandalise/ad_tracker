@@ -116,6 +116,49 @@ export async function getAdsDailyReport(accountId, dateFrom, dateTo, limit = 50)
   return res.data
 }
 
+// ------------- Items (Listings) -------------
+export async function getUserItemIds(userId, offset = 0, limit = 100) {
+  const res = await mlAxios.get(`/users/${userId}/items/search`, {
+    params: { offset, limit }
+  })
+  return res.data
+}
+
+export async function getItemDetails(ids) {
+  const res = await mlAxios.get('/items', {
+    params: {
+      ids: ids.join(','),
+      attributes: 'id,title,price,available_quantity,sold_quantity,status,condition,thumbnail,permalink,currency_id,category_id,listing_type_id'
+    }
+  })
+  return res.data.map(r => r.body).filter(Boolean)
+}
+
+export async function getAllUserItems(userId) {
+  const pageSize = 100
+  const first = await getUserItemIds(userId, 0, pageSize)
+  const total = first.paging.total
+  const allIds = [...first.results]
+
+  const remaining = total - allIds.length
+  if (remaining > 0) {
+    const pages = Math.ceil(remaining / pageSize)
+    const requests = Array.from({ length: pages }, (_, i) =>
+      getUserItemIds(userId, (i + 1) * pageSize, pageSize)
+    )
+    const results = await Promise.all(requests)
+    results.forEach(r => allIds.push(...r.results))
+  }
+
+  const batchSize = 20
+  const detailBatches = []
+  for (let i = 0; i < allIds.length; i += batchSize) {
+    detailBatches.push(getItemDetails(allIds.slice(i, i + batchSize)))
+  }
+  const batches = await Promise.all(detailBatches)
+  return batches.flat()
+}
+
 // ------------- Mock data (for demo / testing without credentials) -------------
 export function getMockCampaigns() {
   return [
@@ -149,6 +192,38 @@ export function getMockAds() {
     ctr: parseFloat((Math.random() * 3 + 0.8).toFixed(2)),
     cpc: parseFloat((Math.random() * 2 + 0.5).toFixed(2)),
     roas: parseFloat((Math.random() * 12 + 2).toFixed(1))
+  }))
+}
+
+export function getMockListings() {
+  const items = [
+    { title: 'Smartphone Samsung Galaxy S24 128GB', price: 3299.99, condition: 'new', status: 'active', available_quantity: 15, sold_quantity: 42 },
+    { title: 'iPhone 15 Pro Max 256GB Preto', price: 7899.00, condition: 'new', status: 'active', available_quantity: 3, sold_quantity: 18 },
+    { title: 'Notebook Dell Inspiron 15 i5 8GB', price: 2799.90, condition: 'new', status: 'active', available_quantity: 8, sold_quantity: 27 },
+    { title: 'Smart TV LG 55" 4K OLED', price: 4599.00, condition: 'new', status: 'paused', available_quantity: 0, sold_quantity: 11 },
+    { title: 'Fone de Ouvido Sony WH-1000XM5', price: 1899.00, condition: 'new', status: 'active', available_quantity: 22, sold_quantity: 65 },
+    { title: 'Tênis Nike Air Max 270 Branco', price: 699.90, condition: 'new', status: 'active', available_quantity: 30, sold_quantity: 89 },
+    { title: 'Cafeteira Nespresso Vertuo Pop', price: 549.90, condition: 'new', status: 'active', available_quantity: 12, sold_quantity: 34 },
+    { title: 'PlayStation 5 Slim Digital', price: 3799.00, condition: 'new', status: 'active', available_quantity: 5, sold_quantity: 23 },
+    { title: 'Xbox Series X 1TB', price: 4199.00, condition: 'new', status: 'paused', available_quantity: 2, sold_quantity: 9 },
+    { title: 'Kindle Paperwhite 16GB', price: 599.00, condition: 'new', status: 'active', available_quantity: 40, sold_quantity: 120 },
+    { title: 'Camera Canon EOS R50 18-45mm', price: 5299.00, condition: 'new', status: 'active', available_quantity: 4, sold_quantity: 7 },
+    { title: 'Tablet Samsung Galaxy Tab S9', price: 3099.00, condition: 'new', status: 'closed', available_quantity: 0, sold_quantity: 15 },
+    { title: 'Caixa de Som JBL Charge 5', price: 899.00, condition: 'new', status: 'active', available_quantity: 18, sold_quantity: 56 },
+    { title: 'Perfume Importado Chanel N°5 100ml', price: 1299.00, condition: 'new', status: 'active', available_quantity: 7, sold_quantity: 31 },
+    { title: 'Aspirador Robô iRobot Roomba j7+', price: 3499.00, condition: 'new', status: 'active', available_quantity: 6, sold_quantity: 14 },
+    { title: 'Micro-ondas Electrolux 31L MEP41', price: 649.00, condition: 'new', status: 'active', available_quantity: 10, sold_quantity: 28 },
+    { title: 'Bicicleta Elétrica Caloi E-Vibe Urban', price: 5999.00, condition: 'used', status: 'active', available_quantity: 1, sold_quantity: 3 },
+    { title: 'Monitor LG UltraWide 34" Curvo', price: 2199.00, condition: 'new', status: 'active', available_quantity: 9, sold_quantity: 19 },
+    { title: 'Mesa Gamer Rise Mode X40', price: 1299.00, condition: 'new', status: 'paused', available_quantity: 0, sold_quantity: 22 },
+    { title: 'Cadeira Gamer DXRacer Craft L', price: 2799.00, condition: 'new', status: 'active', available_quantity: 4, sold_quantity: 11 }
+  ]
+  return items.map((item, i) => ({
+    id: `MLB${900000000 + i}`,
+    ...item,
+    currency_id: 'BRL',
+    thumbnail: `https://via.placeholder.com/60x60/3483FA/FFFFFF?text=${encodeURIComponent(item.title.charAt(0))}`,
+    permalink: `https://www.mercadolivre.com.br/p/MLB${900000000 + i}`
   }))
 }
 

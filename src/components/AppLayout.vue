@@ -24,6 +24,10 @@
           <i class="pi pi-tag" />
           <span>Anúncios</span>
         </router-link>
+        <router-link to="/listings" class="nav-item" active-class="nav-item--active">
+          <i class="pi pi-shopping-bag" />
+          <span>Meus Anúncios</span>
+        </router-link>
         <router-link to="/settings" class="nav-item" active-class="nav-item--active">
           <i class="pi pi-cog" />
           <span>Configurações</span>
@@ -95,6 +99,7 @@ const pageTitles = {
   Dashboard: 'Dashboard',
   Campaigns: 'Campanhas',
   Ads: 'Anúncios',
+  Listings: 'Meus Anúncios',
   Settings: 'Configurações'
 }
 
