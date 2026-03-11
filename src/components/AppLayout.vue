@@ -28,6 +28,10 @@
           <i class="pi pi-shopping-bag" />
           <span>Meus Anúncios</span>
         </router-link>
+        <router-link to="/metrics" class="nav-item" active-class="nav-item--active">
+          <i class="pi pi-chart-line" />
+          <span>Métricas</span>
+        </router-link>
         <router-link to="/questions" class="nav-item" active-class="nav-item--active">
           <i class="pi pi-comments" />
           <span>Perguntas</span>
@@ -104,6 +108,7 @@ const pageTitles = {
   Campaigns: 'Campanhas',
   Ads: 'Anúncios',
   Listings: 'Meus Anúncios',
+  Metrics: 'Métricas',
   Questions: 'Perguntas e Respostas',
   Settings: 'Configurações'
 }

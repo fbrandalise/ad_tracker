@@ -44,6 +44,11 @@ const routes = [
         component: () => import('@/views/ListingsView.vue')
       },
       {
+        path: 'metrics',
+        name: 'Metrics',
+        component: () => import('@/views/MetricsView.vue')
+      },
+      {
         path: 'questions',
         name: 'Questions',
         component: () => import('@/views/QuestionsView.vue')
